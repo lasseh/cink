@@ -1,4 +1,4 @@
-.PHONY: all build rebuild install clean test vet fmt lint deps demo demo-all help
+.PHONY: all build build-linux rebuild install clean test vet fmt lint deps demo demo-all release release-snapshot help
 
 # Project info
 BINARY     := cink
@@ -15,6 +15,11 @@ all: help
 
 # Build binaries - rebuilds when ANY .go file changes
 build: $(BUILD_DIR)/$(BINARY) $(BUILD_DIR)/$(DEMO)
+
+# Cross-compile for linux/amd64
+build-linux: $(SRC)
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/cink
 
 # Force rebuild
 rebuild: clean build
@@ -66,6 +71,16 @@ deps:
 	go mod download
 	go mod tidy
 
+# GoReleaser: create a release (requires a git tag)
+release:
+	@which goreleaser > /dev/null || (echo "Install: go install github.com/goreleaser/goreleaser/v2@latest" && exit 1)
+	goreleaser release --clean
+
+# GoReleaser: test build locally without publishing
+release-snapshot:
+	@which goreleaser > /dev/null || (echo "Install: go install github.com/goreleaser/goreleaser/v2@latest" && exit 1)
+	goreleaser release --snapshot --clean
+
 # Demo targets
 demo: $(BUILD_DIR)/$(DEMO)
 	@./$(BUILD_DIR)/$(DEMO)
@@ -81,8 +96,9 @@ help:
 	@echo "cink - Cisco INK syntax highlighter"
 	@echo ""
 	@echo "Build:"
-	@echo "  make build     Build binaries to $(BUILD_DIR)/"
-	@echo "  make rebuild   Force rebuild (clean + build)"
+	@echo "  make build        Build binaries to $(BUILD_DIR)/"
+	@echo "  make build-linux  Cross-compile $(BINARY) for linux/amd64"
+	@echo "  make rebuild      Force rebuild (clean + build)"
 	@echo "  make install   Install $(BINARY) to GOPATH/bin"
 	@echo "  make clean     Remove build artifacts"
 	@echo ""
@@ -97,6 +113,10 @@ help:
 	@echo "  make demo      Show highlighting demo"
 	@echo "  make demo-all  Show all themes side by side"
 	@echo "  make demo-show Show 'show' command output demo"
+	@echo ""
+	@echo "Release:"
+	@echo "  make release           Run goreleaser (requires git tag)"
+	@echo "  make release-snapshot  Test release build locally"
 	@echo ""
 	@echo "Other:"
 	@echo "  make deps      Download and tidy dependencies"
