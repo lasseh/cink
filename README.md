@@ -31,6 +31,15 @@ If you're lucky enough to work with Juniper instead, check out [jink](https://gi
 
 ## Installation
 
+### Binary Release
+
+Download the latest archive for your platform from the [releases page](https://github.com/lasseh/cink/releases/latest), then extract it:
+
+```bash
+wget <release url>
+tar -zxvf cink_*_linux_amd64.tar.gz -C /usr/local/bin
+```
+
 ### From Source
 
 ```bash
