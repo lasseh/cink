@@ -23,6 +23,8 @@
   - Show output states (`up`/`down`, `connected`/`notconnect`, `err-disabled`, etc.)
   - Cisco CLI prompts (`Router>`, `Router#`, `Router(config-if)#`)
 
+![Theme Demo](.github/cink-demo-theme.png "Themes")
+
 ## See Also
 
 If you're lucky enough to work with Juniper instead, check out [jink](https://github.com/lasseh/jink) — syntax highlighting for a syntax worth highlighting.
