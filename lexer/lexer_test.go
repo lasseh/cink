@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -926,6 +927,26 @@ func TestCiscoPromptDetection(t *testing.T) {
 				t.Errorf("isPrompt(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestTokenizePromptPreservesText(t *testing.T) {
+	inputs := []string{
+		"Router#",
+		"Router# ",
+		"Router#show ip route",
+		"Router#   show ip route  ",
+		"Router(config-if)#no shutdown\n",
+		"\rRouter>\r\n",
+	}
+	for _, input := range inputs {
+		var got strings.Builder
+		for _, tok := range New(input).Tokenize() {
+			got.WriteString(tok.Value)
+		}
+		if got.String() != input {
+			t.Errorf("tokens of %q join to %q", input, got.String())
+		}
 	}
 }
 

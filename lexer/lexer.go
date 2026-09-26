@@ -257,8 +257,10 @@ var (
 	// Group 2 = hostname
 	// Group 3 = mode string e.g. (config-if) - optional
 	// Group 4 = prompt char (> or #)
-	// Group 5 = command after prompt (optional)
-	promptPattern = regexp.MustCompile(`^([\s\x00-\x1f]*)([\w.-]+)(\([\w-]+\))?([>#])\s*(.*?)\n?$`)
+	// Group 5 = spaces between prompt char and command (optional)
+	// Group 6 = command after prompt (optional)
+	// Group 7 = line ending (optional)
+	promptPattern = regexp.MustCompile(`^([\s\x00-\x1f]*)([\w.-]+)(\([\w-]+\))?([>#])([ \t]*)(.*?)(\r?\n)?$`)
 )
 
 // New creates a new Lexer for the given input.
@@ -304,7 +306,9 @@ func (l *Lexer) tryTokenizePrompt(input string) []Token {
 	// matches[2] = hostname
 	// matches[3] = mode string (config), (config-if), etc. (optional)
 	// matches[4] = prompt char (> or #)
-	// matches[5] = command after prompt (optional)
+	// matches[5] = spaces before the command (optional)
+	// matches[6] = command after prompt (optional)
+	// matches[7] = line ending (optional)
 
 	// Preserve leading whitespace/control chars
 	if matches[1] != "" {
@@ -351,17 +355,20 @@ func (l *Lexer) tryTokenizePrompt(input string) []Token {
 	})
 	col++
 
-	// Add command after prompt if present
+	// Keep the spaces before the command as typed
 	if matches[5] != "" {
 		tokens = append(tokens, Token{
 			Type:   TokenText,
-			Value:  " ",
+			Value:  matches[5],
 			Line:   1,
 			Column: col,
 		})
-		col++
+		col += len(matches[5])
+	}
 
-		cmdLexer := New(strings.TrimSpace(matches[5]))
+	// Add command after prompt if present
+	if matches[6] != "" {
+		cmdLexer := New(matches[6])
 		cmdTokens := cmdLexer.Tokenize()
 		for _, tok := range cmdTokens {
 			tok.Column = col
@@ -370,11 +377,11 @@ func (l *Lexer) tryTokenizePrompt(input string) []Token {
 		}
 	}
 
-	// Preserve trailing newline
-	if strings.HasSuffix(input, "\n") {
+	// Preserve the line ending
+	if matches[7] != "" {
 		tokens = append(tokens, Token{
 			Type:   TokenText,
-			Value:  "\n",
+			Value:  matches[7],
 			Line:   1,
 			Column: col,
 		})
