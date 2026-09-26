@@ -76,14 +76,22 @@ func TestStreamPromptResetsMode(t *testing.T) {
 	}
 }
 
-func TestStreamShowPromptStartsShowBlock(t *testing.T) {
+func TestStreamDetectsBlockAfterPrompt(t *testing.T) {
 	h := New()
-	for _, cmd := range []string{"show", "sh", "SHOW"} {
-		t.Run(cmd, func(t *testing.T) {
-			prompt := "Router#" + cmd + " interfaces\n"
-			got := feed(t, h, true, prompt, "Loopback0 is down\n")
-			want := renderAs(h, prompt, lexer.ParseModeConfig) +
-				renderAs(h, "Loopback0 is down\n", lexer.ParseModeShow)
+	config := "hostname R1\ninterface GigabitEthernet0/1\n no shutdown\n"
+	tests := []struct {
+		name   string
+		prompt string
+		output string
+		mode   lexer.ParseMode
+	}{
+		{"show run is config", "Router#show run\n", config, lexer.ParseModeConfig},
+		{"show table is show output", "Router#sh ip int brief\n", intBrief, lexer.ParseModeShow},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := feed(t, h, true, tt.prompt, tt.output)
+			want := renderAs(h, tt.prompt, lexer.ParseModeConfig) + renderAs(h, tt.output, tt.mode)
 			if got != want {
 				t.Errorf("got  %q\nwant %q", got, want)
 			}
@@ -123,7 +131,7 @@ func TestStreamFlushDelay(t *testing.T) {
 	var out syncBuffer
 	s := NewStream(&out, h)
 	s.Force = true
-	s.FlushDelay = 10 * time.Millisecond
+	s.FlushDelay = 200 * time.Millisecond
 
 	// A partial line ending in whitespace is written at once.
 	if _, err := s.Write([]byte("Router# ")); err != nil {
@@ -161,6 +169,15 @@ func TestStreamStaysHighlightedOnceCisco(t *testing.T) {
 	h := New()
 	got := feed(t, h, false, "just a note\n", "hostname R1\n", "just a note\n")
 	want := "just a note\n" + renderAs(h, "hostname R1\njust a note\n", lexer.ParseModeConfig)
+	if got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
+func TestStreamLeavesProseAboveConfigAlone(t *testing.T) {
+	h := New()
+	got := feed(t, h, false, "just a note\nhostname R1\n")
+	want := "just a note\n" + renderAs(h, "hostname R1\n", lexer.ParseModeConfig)
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}

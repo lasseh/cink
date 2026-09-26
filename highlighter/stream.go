@@ -20,11 +20,11 @@ const (
 // Stream highlights text written to it and forwards the result to an
 // underlying writer. It keeps context across writes and lines:
 //
-//   - Unless Force is set, output passes through unchanged until the text
+//   - Unless Force is set, output passes through unchanged until a line
 //     looks like Cisco. From then on every line is highlighted.
 //   - The parse mode (config or show output) is detected at the start of a
-//     block and lasts until the next prompt line. A prompt whose command is
-//     "show" (or an abbreviation) starts a block in show mode.
+//     block, looking ahead at the text already written, and lasts until the
+//     next prompt line.
 //   - A partial line is held back so a word split across writes is lexed
 //     as one word. See FlushDelay.
 //
@@ -128,17 +128,20 @@ func (s *Stream) emitPending() {
 // emit writes one line, highlighted if the stream has seen Cisco text.
 // sample is the text available from this line on, used for detection.
 func (s *Stream) emit(line string, sample []byte) {
-	mode := s.mode
-	if mode == lexer.ParseModeAuto || (!s.Force && !s.cisco) {
-		if len(sample) > detectSample {
-			sample = sample[:detectSample]
-		}
-		detected, ok := lexer.Detect(StripANSI(string(sample)))
-		if !ok && !s.Force && !s.cisco {
+	if !s.Force && !s.cisco {
+		if _, ok := lexer.Detect(StripANSI(line)); !ok {
 			s.write(line)
 			return
 		}
 		s.cisco = true
+	}
+
+	mode := s.mode
+	if mode == lexer.ParseModeAuto {
+		if len(sample) > detectSample {
+			sample = sample[:detectSample]
+		}
+		detected, ok := lexer.Detect(StripANSI(string(sample)))
 		mode = detected
 		if ok {
 			s.mode = detected
@@ -147,7 +150,6 @@ func (s *Stream) emit(line string, sample []byte) {
 
 	var buf strings.Builder
 	prompt := false
-	next := lexer.ParseModeAuto
 	for _, seg := range extractSegments(line) {
 		if seg.isEscape {
 			buf.WriteString(seg.text)
@@ -156,16 +158,11 @@ func (s *Stream) emit(line string, sample []byte) {
 		lex := lexer.New(seg.text)
 		lex.SetParseMode(mode)
 		tokens := lex.Tokenize()
-		if isPrompt, cmd := promptCommand(tokens); isPrompt {
-			prompt = true
-			if isShowCommand(cmd) {
-				next = lexer.ParseModeShow
-			}
-		}
+		prompt = prompt || hasPrompt(tokens)
 		buf.WriteString(s.h.renderTokens(tokens))
 	}
 	if prompt {
-		s.mode = next
+		s.mode = lexer.ParseModeAuto
 	}
 	s.write(buf.String())
 }
@@ -177,26 +174,13 @@ func (s *Stream) write(text string) {
 	_, s.err = io.WriteString(s.w, text)
 }
 
-// promptCommand reports whether tokens hold a prompt, and the first word
-// typed after it.
-func promptCommand(tokens []lexer.Token) (bool, string) {
-	for i, tok := range tokens {
-		if tok.Type != lexer.TokenPromptOper && tok.Type != lexer.TokenPromptConf {
-			continue
+func hasPrompt(tokens []lexer.Token) bool {
+	for _, tok := range tokens {
+		if tok.Type == lexer.TokenPromptOper || tok.Type == lexer.TokenPromptConf {
+			return true
 		}
-		for _, t := range tokens[i+1:] {
-			if strings.TrimSpace(t.Value) != "" {
-				return true, t.Value
-			}
-		}
-		return true, ""
 	}
-	return false, ""
-}
-
-// isShowCommand reports whether word is "show" or an abbreviation of it ("sh").
-func isShowCommand(word string) bool {
-	return len(word) >= 2 && strings.HasPrefix("show", strings.ToLower(word))
+	return false
 }
 
 func endsMidWord(b []byte) bool {
