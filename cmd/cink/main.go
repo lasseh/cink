@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -123,35 +122,16 @@ func highlightStdin(theme *highlighter.Theme, disabled bool, force bool) error {
 	}
 
 	hl := highlighter.NewWithTheme(theme)
-	reader := bufio.NewReader(os.Stdin)
-
-	// Track if we've detected Cisco content (sticky detection)
-	detectedCisco := force
-
-	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			if disabled {
-				fmt.Print(line)
-			} else if detectedCisco || force {
-				fmt.Print(hl.HighlightForced(line))
-			} else {
-				highlighted := hl.Highlight(line)
-				if highlighted != line {
-					detectedCisco = true
-				}
-				fmt.Print(highlighted)
-			}
-		}
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
+	if disabled {
+		hl.Disable()
 	}
+	stream := highlighter.NewStream(os.Stdout, hl)
+	stream.Force = force
 
-	return nil
+	if _, err := io.Copy(stream, os.Stdin); err != nil {
+		return err
+	}
+	return stream.Flush()
 }
 
 func runWithTerminal(args []string, theme *highlighter.Theme, disabled bool) error {

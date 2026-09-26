@@ -8,17 +8,20 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/lasseh/cink/highlighter"
 	"golang.org/x/term"
 )
 
-// Buffer size constants
 const (
 	readBufferSize = 32 * 1024 // Size of the read buffer from PTY
-	lineBufferSize = 4096      // Initial capacity for line buffer
-	lineFlushLimit = 4000      // Flush line buffer when it exceeds this size
+
+	// partialWordDelay is how long a word cut off at the end of a PTY read
+	// waits for its second half. Typed echo arrives one character per read,
+	// so this must stay below what a user notices.
+	partialWordDelay = 15 * time.Millisecond
 )
 
 var (
@@ -45,7 +48,6 @@ type Terminal struct {
 	cmd         *exec.Cmd
 	pty         *os.File
 	highlighter *highlighter.Highlighter
-	enabled     bool
 }
 
 // New creates a new Terminal for the given command
@@ -54,7 +56,6 @@ func New(name string, args ...string) *Terminal {
 	return &Terminal{
 		cmd:         cmd,
 		highlighter: highlighter.New(),
-		enabled:     true,
 	}
 }
 
@@ -65,7 +66,11 @@ func (t *Terminal) SetTheme(theme *highlighter.Theme) {
 
 // SetEnabled enables or disables highlighting
 func (t *Terminal) SetEnabled(enabled bool) {
-	t.enabled = enabled
+	if enabled {
+		t.highlighter.Enable()
+	} else {
+		t.highlighter.Disable()
+	}
 }
 
 // Run starts the command and processes its output with highlighting.
@@ -155,35 +160,22 @@ func (e *ExitError) Error() string {
 // Both complete lines and partial lines (prompts) are highlighted.
 // Cursor control characters (like \r) are preserved to allow command-line editing.
 func (t *Terminal) processOutput(r io.Reader, w io.Writer) {
-	buf := make([]byte, readBufferSize)
-	lineBuf := make([]byte, 0, lineBufferSize)
+	if IsDebug() {
+		w = debugWriter{w}
+	}
+	stream := highlighter.NewStream(w, t.highlighter)
+	stream.Force = true
+	stream.FlushDelay = partialWordDelay
 
+	buf := make([]byte, readBufferSize)
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
-			data := buf[:n]
-
 			if IsDebug() {
-				fmt.Fprintf(os.Stderr, "\n[DEBUG] Read %d bytes: %q\n", n, data)
+				fmt.Fprintf(os.Stderr, "\n[DEBUG] Read %d bytes: %q\n", n, buf[:n])
 			}
-
-			// Process byte by byte
-			for i := 0; i < n; i++ {
-				b := data[i]
-				lineBuf = append(lineBuf, b)
-
-				// Flush on newline or when buffer gets large
-				if b == '\n' || len(lineBuf) > lineFlushLimit {
-					t.writeOutput(w, lineBuf)
-					lineBuf = lineBuf[:0]
-				}
-			}
-
-			// Flush partial lines (prompts) - also highlighted
-			// Cursor control chars like \r are preserved by the lexer
-			if len(lineBuf) > 0 {
-				t.writeOutput(w, lineBuf)
-				lineBuf = lineBuf[:0]
+			if _, err := stream.Write(buf[:n]); err != nil && IsDebug() {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Write error: %v\n", err)
 			}
 		}
 
@@ -194,21 +186,16 @@ func (t *Terminal) processOutput(r io.Reader, w io.Writer) {
 			break
 		}
 	}
-}
 
-// writeOutput writes data to the writer, optionally highlighting it.
-func (t *Terminal) writeOutput(w io.Writer, data []byte) {
-	var output string
-	if t.enabled {
-		output = t.highlighter.HighlightForced(string(data))
-		if IsDebug() {
-			fmt.Fprintf(os.Stderr, "[DEBUG] Highlight: %q -> %q\n", data, output)
-		}
-	} else {
-		output = string(data)
-	}
-
-	if _, err := w.Write([]byte(output)); err != nil && IsDebug() {
+	if err := stream.Flush(); err != nil && IsDebug() {
 		fmt.Fprintf(os.Stderr, "[DEBUG] Write error: %v\n", err)
 	}
+}
+
+// debugWriter logs everything written to the terminal.
+type debugWriter struct{ w io.Writer }
+
+func (d debugWriter) Write(p []byte) (int, error) {
+	fmt.Fprintf(os.Stderr, "[DEBUG] Write: %q\n", p)
+	return d.w.Write(p)
 }

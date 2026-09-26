@@ -59,7 +59,7 @@ func TestNew(t *testing.T) {
 	if term.highlighter == nil {
 		t.Error("highlighter should not be nil")
 	}
-	if !term.enabled {
+	if !term.highlighter.IsEnabled() {
 		t.Error("highlighting should be enabled by default")
 	}
 }
@@ -73,54 +73,18 @@ func TestSetTheme(t *testing.T) {
 func TestSetEnabled(t *testing.T) {
 	term := New("echo", "test")
 
-	if !term.enabled {
+	if !term.highlighter.IsEnabled() {
 		t.Error("should be enabled by default")
 	}
 
 	term.SetEnabled(false)
-	if term.enabled {
+	if term.highlighter.IsEnabled() {
 		t.Error("should be disabled after SetEnabled(false)")
 	}
 
 	term.SetEnabled(true)
-	if !term.enabled {
+	if !term.highlighter.IsEnabled() {
 		t.Error("should be enabled after SetEnabled(true)")
-	}
-}
-
-func TestWriteOutput(t *testing.T) {
-	term := New("echo", "test")
-
-	tests := []struct {
-		name     string
-		enabled  bool
-		input    string
-		contains string
-	}{
-		{
-			name:     "highlighting enabled with Cisco config",
-			enabled:  true,
-			input:    "interface GigabitEthernet0/0/0",
-			contains: "\033[", // Should have ANSI codes
-		},
-		{
-			name:     "highlighting disabled",
-			enabled:  false,
-			input:    "interface GigabitEthernet0/0/0",
-			contains: "interface", // Should be unchanged
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			term.SetEnabled(tt.enabled)
-			var buf bytes.Buffer
-			term.writeOutput(&buf, []byte(tt.input))
-			output := buf.String()
-			if !strings.Contains(output, tt.contains) {
-				t.Errorf("output %q should contain %q", output, tt.contains)
-			}
-		})
 	}
 }
 
@@ -158,7 +122,7 @@ func TestProcessOutputLargeBuffer(t *testing.T) {
 	term := New("echo", "test")
 	term.SetEnabled(false)
 
-	largeLine := strings.Repeat("x", lineFlushLimit+100)
+	largeLine := strings.Repeat("x", 5000)
 	reader := strings.NewReader(largeLine)
 	var output bytes.Buffer
 
@@ -186,21 +150,6 @@ func TestProcessOutputWithHighlighting(t *testing.T) {
 	stripped := highlighter.StripANSI(output.String())
 	if stripped != input {
 		t.Errorf("stripped output %q should equal input %q", stripped, input)
-	}
-}
-
-func TestConstants(t *testing.T) {
-	if readBufferSize <= 0 {
-		t.Error("readBufferSize should be positive")
-	}
-	if lineBufferSize <= 0 {
-		t.Error("lineBufferSize should be positive")
-	}
-	if lineFlushLimit <= 0 {
-		t.Error("lineFlushLimit should be positive")
-	}
-	if lineFlushLimit >= readBufferSize {
-		t.Error("lineFlushLimit should be less than readBufferSize")
 	}
 }
 
