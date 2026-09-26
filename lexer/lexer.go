@@ -156,7 +156,7 @@ var (
 		"new-model": true, "server": true, "key": true,
 
 		// Other
-		"trunk": true,
+		"trunk":  true,
 		"native": true, "allowed": true, "tagging": true,
 		"nonegotiate": true, "negotiation": true, "auto": true,
 		"half": true, "flow-control": true,
@@ -532,7 +532,7 @@ func (l *Lexer) scanWord() Token {
 // classifyWord determines the token type for a word
 func (l *Lexer) classifyWord(word string) TokenType {
 	if l.parseMode == ParseModeAuto && !l.detectedMode {
-		l.parseMode = l.detectParseMode()
+		l.parseMode, _ = Detect(l.input)
 		l.detectedMode = true
 	}
 
@@ -724,67 +724,105 @@ func isAllDigits(s string) bool {
 	return true
 }
 
-// ConfigIndicators contains keywords/patterns that suggest Cisco configuration input.
-var ConfigIndicators = []string{
+// configIndicators are statements that start a line of Cisco configuration.
+var configIndicators = []string{
 	"hostname ", "interface ", "router ", "ip address ",
 	"switchport ", "access-list ", "no ", "line vty",
 	"line con", "service ", "enable ", "username ",
 	"ip route ", "snmp-server ", "logging ", "ntp ",
 	"crypto ", "aaa ", "spanning-tree ", "vlan ",
-	"banner ", "ip access-list ",
+	"banner ", "ip access-list ", "transport ",
+	"exec-timeout ", "channel-group ",
 }
 
-// ShowIndicators contains keywords/patterns that suggest show command output.
-var ShowIndicators = []string{
+// showIndicators are words and phrases that suggest show command output.
+var showIndicators = []string{
 	"line protocol", "up/up", "down/down",
 	"notconnect", "err-disabled", "connected",
 	"bgp summary", "ospf neighbor",
-	"show ", "last input", "last output",
+	"show", "last input", "last output",
 	"5 minute", "input rate", "output rate",
 	"show version", "cisco ios",
 }
 
-// detectParseMode analyzes input to determine if it's config or show output.
-func (l *Lexer) detectParseMode() ParseMode {
-	sample := l.input
+// Detect reports whether input looks like Cisco configuration or show
+// output, and which parse mode fits it. It samples the start of input.
+// When ok is false the returned mode is ParseModeConfig.
+//
+// Config indicators must start a line (after indentation). Show indicators
+// match as whole words. One config indicator is enough, but show output
+// needs two hits, because show vocabulary ("connected") is common prose.
+func Detect(input string) (mode ParseMode, ok bool) {
+	sample := input
 	if len(sample) > parseModeDetectionSampleSize {
 		sample = sample[:parseModeDetectionSampleSize]
 	}
-	lower := strings.ToLower(sample)
 
-	// Config indicators
+	if isPrompt(sample) {
+		return ParseModeConfig, true
+	}
+
+	lower := strings.ToLower(sample)
+	lines := strings.Split(lower, "\n")
+
 	configScore := 0
-	for _, ind := range ConfigIndicators {
-		if strings.Contains(lower, ind) {
-			configScore++
+	for _, ind := range configIndicators {
+		for _, line := range lines {
+			if strings.HasPrefix(strings.TrimLeft(line, " \t\r"), ind) {
+				configScore++
+				break
+			}
 		}
 	}
 	// ! section separators are a strong config indicator
-	if strings.Contains(sample, "\n!\n") || strings.HasPrefix(sample, "!\n") {
+	bangs := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "!" {
+			bangs++
+		}
+	}
+	if bangs >= 2 {
 		configScore += 2
 	}
 
-	// Show indicators
 	showScore := 0
-	for _, ind := range ShowIndicators {
-		if strings.Contains(lower, ind) {
+	for _, ind := range showIndicators {
+		if containsWord(lower, ind) {
 			showScore++
 		}
 	}
-
-	// Tabular data
 	if tabularPattern.MatchString(sample) {
 		showScore += 2
 	}
 
 	if showScore >= 2 && showScore > configScore {
-		return ParseModeShow
+		return ParseModeShow, true
 	}
-	return ParseModeConfig
+	return ParseModeConfig, configScore > 0 || showScore >= 2
 }
 
-// IsPrompt checks if the input matches a Cisco CLI prompt pattern.
-func IsPrompt(input string) bool {
+// containsWord reports whether phrase occurs in s with no letter or digit
+// directly before or after it.
+func containsWord(s, phrase string) bool {
+	for i := 0; ; {
+		j := strings.Index(s[i:], phrase)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(phrase)
+		if (start == 0 || !isWordByte(s[start-1])) && (end == len(s) || !isWordByte(s[end])) {
+			return true
+		}
+		i = start + 1
+	}
+}
+
+func isWordByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
+}
+
+// isPrompt checks if the input matches a Cisco CLI prompt pattern.
+func isPrompt(input string) bool {
 	return promptPattern.MatchString(strings.TrimSpace(input))
 }
 

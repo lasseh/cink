@@ -135,44 +135,6 @@ func TestHighlightLines(t *testing.T) {
 	}
 }
 
-func TestLooksLikeCisco(t *testing.T) {
-	h := New()
-
-	positives := []string{
-		"hostname core-router-01",
-		"interface GigabitEthernet0/0/0",
-		"router ospf 1",
-		"ip address 10.0.0.1 255.255.255.0",
-		"switchport mode access",
-		"no shutdown",
-		"line vty 0 15",
-		"access-list 100 permit ip any any",
-		"Router>",
-		"Router#",
-		"Router(config)#",
-	}
-
-	for _, input := range positives {
-		if !h.looksLikeCisco(input) {
-			t.Errorf("should recognize %q as Cisco config", input)
-		}
-	}
-
-	negatives := []string{
-		"Hello world",
-		"This is plain text",
-		"SELECT * FROM users",
-		"function main() {}",
-		"import os",
-	}
-
-	for _, input := range negatives {
-		if h.looksLikeCisco(input) {
-			t.Errorf("should NOT recognize %q as Cisco config", input)
-		}
-	}
-}
-
 func TestStripANSI(t *testing.T) {
 	tests := []struct {
 		input    string

@@ -429,8 +429,8 @@ func TestTokenizeNumbers(t *testing.T) {
 
 func TestTokenizeCommunity(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
+		name      string
+		input     string
 		community string
 	}{
 		{"basic", "community 65000:100", "65000:100"},
@@ -814,35 +814,46 @@ func TestTokenizeCompoundStates(t *testing.T) {
 	}
 }
 
-func TestParseModeDetection(t *testing.T) {
+func TestDetect(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected ParseMode
+		name   string
+		input  string
+		wantOK bool
+		want   ParseMode
 	}{
-		{
-			name:     "cisco config",
-			input:    "hostname router\ninterface GigabitEthernet0/0/0\n ip address 10.0.0.1 255.255.255.0\n no shutdown",
-			expected: ParseModeConfig,
-		},
-		{
-			name:     "cisco config with bangs",
-			input:    "!\nhostname router\n!\ninterface GigabitEthernet0/0/0\n ip address 10.0.0.1 255.255.255.0\n!",
-			expected: ParseModeConfig,
-		},
-		{
-			name:     "show interface",
-			input:    "GigabitEthernet0/0/0 is up, line protocol is up\n  Internet address is 203.0.113.1/24\n  5 minute input rate 1000 bits/sec",
-			expected: ParseModeShow,
-		},
+		{"cisco config", "hostname router\ninterface GigabitEthernet0/0/0\n ip address 10.0.0.1 255.255.255.0\n no shutdown", true, ParseModeConfig},
+		{"cisco config with bangs", "!\nhostname router\n!\ninterface GigabitEthernet0/0/0\n ip address 10.0.0.1 255.255.255.0\n!", true, ParseModeConfig},
+		{"bang separators only", "!\n!\n", true, ParseModeConfig},
+		{"show interface", "GigabitEthernet0/0/0 is up, line protocol is up\n  Internet address is 203.0.113.1/24\n  5 minute input rate 1000 bits/sec", true, ParseModeShow},
+		{"hostname", "hostname core-router-01", true, ParseModeConfig},
+		{"interface", "interface GigabitEthernet0/0/0", true, ParseModeConfig},
+		{"router ospf", "router ospf 1", true, ParseModeConfig},
+		{"ip address", "ip address 10.0.0.1 255.255.255.0", true, ParseModeConfig},
+		{"switchport", "switchport mode access", true, ParseModeConfig},
+		{"negation", "no shutdown", true, ParseModeConfig},
+		{"indented negation", " no shutdown", true, ParseModeConfig},
+		{"line vty", "line vty 0 15", true, ParseModeConfig},
+		{"transport", " transport input ssh", true, ParseModeConfig},
+		{"access-list", "access-list 100 permit ip any any", true, ParseModeConfig},
+		{"user prompt", "Router>", true, ParseModeConfig},
+		{"enable prompt", "Router#", true, ParseModeConfig},
+		{"config prompt", "Router(config)#", true, ParseModeConfig},
+		{"plain text", "Hello world", false, ParseModeConfig},
+		{"sentence", "This is plain text", false, ParseModeConfig},
+		{"sql", "SELECT * FROM users", false, ParseModeConfig},
+		{"code", "function main() {}", false, ParseModeConfig},
+		{"python", "import os", false, ParseModeConfig},
+		{"no mid-sentence", "there is no problem with the build", false, ParseModeConfig},
+		{"word ending in no", "the casino opened", false, ParseModeConfig},
+		{"single show word", "we are connected now", false, ParseModeConfig},
+		{"show inside a word", "disconnected showroom", false, ParseModeConfig},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := New(tt.input)
-			mode := l.detectParseMode()
-			if mode != tt.expected {
-				t.Errorf("expected mode %v, got %v", tt.expected, mode)
+			mode, ok := Detect(tt.input)
+			if ok != tt.wantOK || mode != tt.want {
+				t.Errorf("Detect(%q) = (%v, %v), want (%v, %v)", tt.input, mode, ok, tt.want, tt.wantOK)
 			}
 		})
 	}
@@ -910,9 +921,9 @@ func TestCiscoPromptDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := IsPrompt(tt.input)
+			result := isPrompt(tt.input)
 			if result != tt.expected {
-				t.Errorf("IsPrompt(%q) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("isPrompt(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
 	}

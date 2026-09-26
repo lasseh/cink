@@ -84,11 +84,14 @@ func (h *Highlighter) Highlight(input string) string {
 
 	cleaned := StripANSI(input)
 
-	if !h.looksLikeCisco(cleaned) {
+	mode, ok := lexer.Detect(cleaned)
+	if !ok {
 		return input
 	}
 
-	return h.highlightTokensCleaned(cleaned)
+	lex := lexer.New(cleaned)
+	lex.SetParseMode(mode)
+	return h.renderTokens(lex.Tokenize())
 }
 
 // HighlightForced applies syntax highlighting without checking if input looks like Cisco.
@@ -149,144 +152,6 @@ func (h *Highlighter) HighlightLines(lines []string) []string {
 		result[i] = h.Highlight(line)
 	}
 	return result
-}
-
-// Cisco-specific keyword patterns for quick detection
-var ciscoSpecificKeywords = []string{
-	"switchport mode", "ip address ", "ip route ",
-	"router ospf", "router bgp", "router eigrp",
-	"transport input", "exec-timeout",
-	"channel-group", "spanning-tree portfast",
-}
-
-// looksLikeCisco performs a quick check to see if text appears to be Cisco config or show output
-func (h *Highlighter) looksLikeCisco(input string) bool {
-	// Check for Cisco CLI prompts
-	if isPromptLine(input) {
-		return true
-	}
-
-	lower := strings.ToLower(input)
-
-	if hasConfigIndicators(lower) {
-		return true
-	}
-
-	if hasShowIndicators(lower) {
-		return true
-	}
-
-	// Check for ! section separators (lines with just "!")
-	if hasCiscoSeparators(input) {
-		return true
-	}
-
-	// Check absence of JunOS indicators (helps disambiguate)
-	// If we see braces or semicolons, it's probably not Cisco
-	if hasCiscoKeywords(lower) {
-		return true
-	}
-
-	return false
-}
-
-// isPromptLine checks if the input looks like a Cisco CLI prompt
-func isPromptLine(input string) bool {
-	if lexer.IsPrompt(input) {
-		return true
-	}
-
-	trimmed := strings.TrimSpace(input)
-	// Quick check for hostname> or hostname# patterns
-	if len(trimmed) > 1 {
-		last := trimmed[len(trimmed)-1]
-		if last == '>' || last == '#' {
-			// Check that everything before prompt char is valid hostname chars or mode
-			prefix := trimmed[:len(trimmed)-1]
-			// Remove mode suffix like (config-if)
-			if idx := strings.LastIndex(prefix, ")"); idx >= 0 {
-				if pIdx := strings.LastIndex(prefix, "("); pIdx >= 0 {
-					prefix = prefix[:pIdx]
-				}
-			}
-			if len(prefix) > 0 && isValidHostname(prefix) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// isValidHostname checks if a string looks like a valid hostname
-func isValidHostname(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for _, ch := range s {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-			(ch >= '0' && ch <= '9') || ch == '-' || ch == '.' || ch == '_') {
-			return false
-		}
-	}
-	return true
-}
-
-// hasConfigIndicators checks for common Cisco config keywords/patterns
-func hasConfigIndicators(lower string) bool {
-	for _, indicator := range lexer.ConfigIndicators {
-		if strings.Contains(lower, indicator) {
-			return true
-		}
-	}
-	return false
-}
-
-// hasShowIndicators checks for show command output patterns
-func hasShowIndicators(lower string) bool {
-	for _, indicator := range lexer.ShowIndicators {
-		if strings.Contains(lower, indicator) {
-			return true
-		}
-	}
-	return false
-}
-
-// hasCiscoSeparators checks for ! section separators
-func hasCiscoSeparators(input string) bool {
-	bangCount := 0
-	i := 0
-	for i < len(input) {
-		// Find start of line (or beginning of input)
-		lineStart := i
-		// Scan to end of line
-		end := strings.IndexByte(input[i:], '\n')
-		var line string
-		if end == -1 {
-			line = input[lineStart:]
-			i = len(input)
-		} else {
-			line = input[lineStart : lineStart+end]
-			i = lineStart + end + 1
-		}
-		if strings.TrimSpace(line) == "!" {
-			bangCount++
-			if bangCount >= 2 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// hasCiscoKeywords checks for Cisco-specific command patterns
-func hasCiscoKeywords(lower string) bool {
-	for _, kw := range ciscoSpecificKeywords {
-		if strings.Contains(lower, kw) {
-			return true
-		}
-	}
-	return false
 }
 
 // HighlightShowOutput highlights show command output specifically using show mode.
