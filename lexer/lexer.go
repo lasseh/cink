@@ -54,121 +54,116 @@ func (m ParseMode) String() string {
 
 // Keyword sets for Cisco IOS/IOS-XE classification
 var (
-	commands = map[string]bool{
-		"interface": true, "router": true, "ip": true, "ipv6": true,
-		"show": true, "configure": true, "hostname": true, "username": true,
-		"enable": true, "service": true, "line": true, "logging": true,
-		"ntp": true, "snmp-server": true, "crypto": true, "aaa": true,
-		"spanning-tree": true, "vlan": true, "banner": true,
-		"shutdown": true, "write": true, "copy": true, "reload": true,
-		"ping": true, "traceroute": true, "clock": true, "boot": true,
-		"archive": true, "errdisable": true, "default-gateway": true,
-		"do": true, "exit": true, "end": true,
-	}
+	// configWords maps each config-mode word to its token type. A word has
+	// exactly one type: the compiler rejects a duplicate key.
+	configWords = map[string]TokenType{
+		// Commands
+		"interface": TokenCommand, "router": TokenCommand, "ip": TokenCommand, "ipv6": TokenCommand,
+		"show": TokenCommand, "configure": TokenCommand, "hostname": TokenCommand, "username": TokenCommand,
+		"enable": TokenCommand, "service": TokenCommand, "line": TokenCommand, "logging": TokenCommand,
+		"ntp": TokenCommand, "snmp-server": TokenCommand, "crypto": TokenCommand, "aaa": TokenCommand,
+		"spanning-tree": TokenCommand, "vlan": TokenCommand, "banner": TokenCommand,
+		"shutdown": TokenCommand, "write": TokenCommand, "copy": TokenCommand, "reload": TokenCommand,
+		"ping": TokenCommand, "traceroute": TokenCommand, "clock": TokenCommand, "boot": TokenCommand,
+		"archive": TokenCommand, "errdisable": TokenCommand, "default-gateway": TokenCommand,
+		"do": TokenCommand, "exit": TokenCommand, "end": TokenCommand,
 
-	sections = map[string]bool{
-		"interface": true, "router": true, "line": true,
-		"access-list": true, "route-map": true, "prefix-list": true,
-		"class-map": true, "policy-map": true, "crypto": true,
-		"vlan": true, "redundancy": true, "controller": true,
-		"ip access-list": true, "key": true, "track": true,
-		"monitor": true, "event": true, "applet": true,
-	}
+		// Section headers
+		"access-list": TokenSection, "route-map": TokenSection, "prefix-list": TokenSection,
+		"class-map": TokenSection, "policy-map": TokenSection,
+		"redundancy": TokenSection, "controller": TokenSection,
+		"key": TokenSection, "track": TokenSection,
+		"monitor": TokenSection, "event": TokenSection, "applet": TokenSection,
 
-	protocols = map[string]bool{
-		"ospf": true, "bgp": true, "eigrp": true, "rip": true,
-		"isis": true, "mpls": true, "hsrp": true, "vrrp": true,
-		"stp": true, "rstp": true, "lacp": true, "dot1q": true,
-		"ipsec": true, "gre": true, "tcp": true, "udp": true,
-		"icmp": true, "ssh": true, "dhcp": true, "bfd": true,
-		"cdp": true, "lldp": true, "evpn": true, "vxlan": true,
-		"isakmp": true, "nhrp": true, "pim": true, "igmp": true,
-		"msdp": true, "lisp": true, "omp": true, "snmp": true,
-		"radius": true, "tacacs": true, "tacacs+": true,
-		"telnet": true, "ftp": true, "tftp": true, "http": true,
-		"https": true, "ntp": true, "dns": true, "syslog": true,
-		"netflow": true, "sflow": true, "ipfix": true,
-	}
+		// Protocols
+		"ospf": TokenProtocol, "bgp": TokenProtocol, "eigrp": TokenProtocol, "rip": TokenProtocol,
+		"isis": TokenProtocol, "mpls": TokenProtocol, "hsrp": TokenProtocol, "vrrp": TokenProtocol,
+		"stp": TokenProtocol, "rstp": TokenProtocol, "lacp": TokenProtocol, "dot1q": TokenProtocol,
+		"ipsec": TokenProtocol, "gre": TokenProtocol, "tcp": TokenProtocol, "udp": TokenProtocol,
+		"icmp": TokenProtocol, "ssh": TokenProtocol, "dhcp": TokenProtocol, "bfd": TokenProtocol,
+		"cdp": TokenProtocol, "lldp": TokenProtocol, "evpn": TokenProtocol, "vxlan": TokenProtocol,
+		"isakmp": TokenProtocol, "nhrp": TokenProtocol, "pim": TokenProtocol, "igmp": TokenProtocol,
+		"msdp": TokenProtocol, "lisp": TokenProtocol, "omp": TokenProtocol, "snmp": TokenProtocol,
+		"radius": TokenProtocol, "tacacs": TokenProtocol, "tacacs+": TokenProtocol,
+		"telnet": TokenProtocol, "ftp": TokenProtocol, "tftp": TokenProtocol, "http": TokenProtocol,
+		"https": TokenProtocol, "dns": TokenProtocol, "syslog": TokenProtocol,
+		"netflow": TokenProtocol, "sflow": TokenProtocol, "ipfix": TokenProtocol,
 
-	actions = map[string]bool{
-		"permit": true, "deny": true, "log": true, "log-input": true,
-		"established": true, "match": true, "set": true,
-		"remark": true, "evaluate": true, "reflect": true,
-	}
+		// Actions
+		"permit": TokenAction, "deny": TokenAction, "log": TokenAction, "log-input": TokenAction,
+		"established": TokenAction, "match": TokenAction, "set": TokenAction,
+		"remark": TokenAction, "evaluate": TokenAction, "reflect": TokenAction,
 
-	operators = map[string]bool{
-		"eq": true, "gt": true, "lt": true, "neq": true,
-		"range": true, "ge": true, "le": true, "any": true,
-		"host": true,
-	}
+		// Operators
+		"eq": TokenOperator, "gt": TokenOperator, "lt": TokenOperator, "neq": TokenOperator,
+		"range": TokenOperator, "ge": TokenOperator, "le": TokenOperator, "any": TokenOperator,
+		"host": TokenOperator,
 
-	keywords = map[string]bool{
+		// Other keywords
 		// Interface keywords
-		"description": true, "address": true, "switchport": true,
-		"speed": true, "duplex": true, "mtu": true, "bandwidth": true,
-		"encapsulation": true, "channel-group": true, "channel-protocol": true,
-		"standby": true, "ip address": true,
-		"no-autostate": true, "autostate": true,
+		"description": TokenKeyword, "address": TokenKeyword, "switchport": TokenKeyword,
+		"speed": TokenKeyword, "duplex": TokenKeyword, "mtu": TokenKeyword, "bandwidth": TokenKeyword,
+		"encapsulation": TokenKeyword, "channel-group": TokenKeyword, "channel-protocol": TokenKeyword,
+		"standby":      TokenKeyword,
+		"no-autostate": TokenKeyword, "autostate": TokenKeyword,
 
 		// Routing keywords
-		"network": true, "neighbor": true, "redistribute": true,
-		"area": true, "remote-as": true, "update-source": true,
-		"route-map": true, "access-group": true, "nat": true,
-		"inside": true, "outside": true, "overload": true,
-		"default-information": true, "originate": true,
-		"summary-address": true, "passive-interface": true,
-		"distance": true, "metric": true, "weight": true,
-		"local-preference": true, "next-hop-self": true,
-		"soft-reconfiguration": true, "inbound": true,
-		"prefix-list": true, "distribute-list": true,
-		"maximum-paths": true, "auto-summary": true,
-		"synchronization": true, "log-neighbor-changes": true,
-		"address-family": true, "unicast": true, "multicast": true,
-		"vpnv4": true, "vpnv6": true,
+		"network": TokenKeyword, "neighbor": TokenKeyword, "redistribute": TokenKeyword,
+		"area": TokenKeyword, "remote-as": TokenKeyword, "update-source": TokenKeyword,
+		"access-group": TokenKeyword, "nat": TokenKeyword,
+		"inside": TokenKeyword, "outside": TokenKeyword, "overload": TokenKeyword,
+		"default-information": TokenKeyword, "originate": TokenKeyword,
+		"summary-address": TokenKeyword, "passive-interface": TokenKeyword,
+		"distance": TokenKeyword, "metric": TokenKeyword, "weight": TokenKeyword,
+		"local-preference": TokenKeyword, "next-hop-self": TokenKeyword,
+		"soft-reconfiguration": TokenKeyword, "inbound": TokenKeyword,
+		"distribute-list": TokenKeyword,
+		"maximum-paths":   TokenKeyword, "auto-summary": TokenKeyword,
+		"synchronization": TokenKeyword, "log-neighbor-changes": TokenKeyword,
+		"address-family": TokenKeyword, "unicast": TokenKeyword, "multicast": TokenKeyword,
+		"vpnv4": TokenKeyword, "vpnv6": TokenKeyword,
 
 		// Security keywords
-		"access-class": true, "transport": true, "input": true,
-		"output": true, "login": true, "password": true,
-		"secret": true, "privilege": true, "authentication": true,
-		"authorization": true, "accounting": true, "group": true,
-		"method": true, "local": true,
+		"access-class": TokenKeyword, "transport": TokenKeyword, "input": TokenKeyword,
+		"output": TokenKeyword, "login": TokenKeyword, "password": TokenKeyword,
+		"secret": TokenKeyword, "privilege": TokenKeyword, "authentication": TokenKeyword,
+		"authorization": TokenKeyword, "accounting": TokenKeyword, "group": TokenKeyword,
+		"method": TokenKeyword, "local": TokenKeyword,
 
 		// System keywords
-		"version": true, "source": true, "trap": true,
-		"community": true, "location": true, "contact": true,
-		"default": true, "timeout": true, "exec-timeout": true,
-		"mask": true, "wildcard": true, "inverse-mask": true,
+		"version": TokenKeyword, "source": TokenKeyword, "trap": TokenKeyword,
+		"community": TokenKeyword, "location": TokenKeyword, "contact": TokenKeyword,
+		"default": TokenKeyword, "timeout": TokenKeyword, "exec-timeout": TokenKeyword,
+		"mask": TokenKeyword, "wildcard": TokenKeyword, "inverse-mask": TokenKeyword,
 
 		// Spanning-tree keywords
-		"mode": true, "priority": true, "vlan": true,
-		"portfast": true, "bpduguard": true, "bpdufilter": true,
-		"guard": true, "root": true,
+		"mode": TokenKeyword, "priority": TokenKeyword,
+		"portfast": TokenKeyword, "bpduguard": TokenKeyword, "bpdufilter": TokenKeyword,
+		"guard": TokenKeyword, "root": TokenKeyword,
 
 		// VLAN keywords
-		"name": true, "state": true, "active": true, "suspend": true,
+		"name": TokenKeyword, "state": TokenKeyword, "active": TokenKeyword, "suspend": TokenKeyword,
 
 		// QoS keywords
-		"class": true, "police": true, "shape": true,
-		"queue": true, "dscp": true, "cos": true,
-		"service-policy": true, "policy-map": true,
+		"class": TokenKeyword, "police": TokenKeyword, "shape": TokenKeyword,
+		"queue": TokenKeyword, "dscp": TokenKeyword, "cos": TokenKeyword,
+		"service-policy": TokenKeyword,
 
 		// AAA keywords
-		"new-model": true, "server": true, "key": true,
+		"new-model": TokenKeyword, "server": TokenKeyword,
 
 		// Other
-		"trunk":  true,
-		"native": true, "allowed": true, "tagging": true,
-		"nonegotiate": true, "negotiation": true, "auto": true,
-		"half": true, "flow-control": true,
-		"send": true, "both": true,
-		"storm-control": true, "level": true,
+		"trunk":  TokenKeyword,
+		"native": TokenKeyword, "allowed": TokenKeyword, "tagging": TokenKeyword,
+		"nonegotiate": TokenKeyword, "negotiation": TokenKeyword, "auto": TokenKeyword,
+		"half": TokenKeyword, "flow-control": TokenKeyword,
+		"send": TokenKeyword, "both": TokenKeyword,
+		"storm-control": TokenKeyword, "level": TokenKeyword,
 	}
 
 	// Keywords that consume the rest of the line as a value
 	valueKeywords = map[string]bool{
 		"description": true,
-		"hostname":    true,
-		"banner":      true,
 		"remark":      true,
 	}
 
@@ -565,37 +560,12 @@ func (l *Lexer) classifyConfigWord(word, lower string) TokenType {
 		return TokenASN
 	}
 
-	// Check keyword maps
-	if commands[lower] {
-		l.lastToken = lower
-		return TokenCommand
-	}
-	if sections[lower] {
-		l.lastToken = lower
-		return TokenSection
-	}
-	if protocols[lower] {
-		l.lastToken = lower
-		return TokenProtocol
-	}
-	if actions[lower] {
-		// Set flag for remark (consumes rest of line)
+	if tokenType, ok := configWords[lower]; ok {
 		if valueKeywords[lower] {
 			l.expectingValue = true
 		}
 		l.lastToken = lower
-		return TokenAction
-	}
-	if operators[lower] {
-		l.lastToken = lower
-		return TokenOperator
-	}
-	if keywords[lower] {
-		if valueKeywords[lower] {
-			l.expectingValue = true
-		}
-		l.lastToken = lower
-		return TokenKeyword
+		return tokenType
 	}
 
 	return l.classifySharedPatterns(word)

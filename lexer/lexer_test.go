@@ -930,6 +930,20 @@ func TestCiscoPromptDetection(t *testing.T) {
 	}
 }
 
+// scanWord splits on whitespace, so a vocabulary key with a space never matches.
+func TestVocabularyKeysAreSingleWords(t *testing.T) {
+	for word := range configWords {
+		if strings.ContainsAny(word, " \t") {
+			t.Errorf("configWords key %q can never match", word)
+		}
+	}
+	for word := range valueKeywords {
+		if _, ok := configWords[word]; !ok {
+			t.Errorf("valueKeywords key %q is not in configWords", word)
+		}
+	}
+}
+
 func TestTokenizePromptPreservesText(t *testing.T) {
 	inputs := []string{
 		"Router#",
