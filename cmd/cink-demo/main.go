@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/lasseh/cink/highlighter"
@@ -186,7 +188,7 @@ func main() {
 	hl := highlighter.NewWithTheme(theme)
 
 	fmt.Printf("\n=== Cisco IOS Syntax Highlighting Demo (Theme: %s) ===\n\n", themeName)
-	fmt.Println(hl.HighlightForced(sampleConfig))
+	printHighlighted(hl, sampleConfig)
 }
 
 func showAllThemes() {
@@ -225,7 +227,7 @@ ip access-list extended PROTECT
 	for _, t := range themes {
 		hl := highlighter.NewWithTheme(t.theme)
 		fmt.Printf("\n=== Theme: %s ===\n", t.name)
-		fmt.Println(hl.HighlightForced(sample))
+		printHighlighted(hl, sample)
 	}
 }
 
@@ -236,17 +238,27 @@ func showShowOutputDemo(themeName string) {
 	fmt.Printf("\n=== Cisco Show Output Highlighting Demo (Theme: %s) ===\n", themeName)
 
 	fmt.Println("\n--- show ip bgp summary ---")
-	fmt.Println(hl.HighlightShowOutput(sampleBGPSummary))
+	printHighlighted(hl, sampleBGPSummary)
 
 	fmt.Println("\n--- show ip ospf neighbor ---")
-	fmt.Println(hl.HighlightShowOutput(sampleOSPFNeighbors))
+	printHighlighted(hl, sampleOSPFNeighbors)
 
 	fmt.Println("\n--- show ip interface brief ---")
-	fmt.Println(hl.HighlightShowOutput(sampleInterfaceBrief))
+	printHighlighted(hl, sampleInterfaceBrief)
 
 	fmt.Println("\n--- show version ---")
-	fmt.Println(hl.HighlightShowOutput(sampleShowVersion))
+	printHighlighted(hl, sampleShowVersion)
 
 	fmt.Println("\n--- show mac address-table ---")
-	fmt.Println(hl.HighlightShowOutput(sampleMACTable))
+	printHighlighted(hl, sampleMACTable)
+}
+
+// printHighlighted writes text through a Stream, the same path cink uses
+// for piped input and SSH sessions.
+func printHighlighted(hl *highlighter.Highlighter, text string) {
+	s := highlighter.NewStream(os.Stdout, hl)
+	s.Force = true
+	_, _ = io.WriteString(s, text)
+	_ = s.Flush()
+	fmt.Println()
 }
