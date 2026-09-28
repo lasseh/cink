@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -804,6 +805,25 @@ func isWordByte(b byte) bool {
 func isPrompt(input string) bool {
 	return promptPattern.MatchString(strings.TrimSpace(input))
 }
+
+// IsPrompt checks if the input matches a Cisco CLI prompt pattern.
+//
+// Deprecated: use Detect, which also recognizes prompts.
+func IsPrompt(input string) bool {
+	return isPrompt(input)
+}
+
+// ConfigIndicators is a copy of the phrases Detect looks for at the start
+// of a config line. Changing it does not affect detection.
+//
+// Deprecated: use Detect.
+var ConfigIndicators = slices.Clone(configIndicators)
+
+// ShowIndicators is a copy of the words and phrases Detect looks for in
+// show output. Changing it does not affect detection.
+//
+// Deprecated: use Detect.
+var ShowIndicators = slices.Clone(showIndicators)
 
 // SetParseMode explicitly sets the parsing mode
 func (l *Lexer) SetParseMode(mode ParseMode) {
