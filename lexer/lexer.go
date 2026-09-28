@@ -720,6 +720,8 @@ var showIndicators = []string{
 	"show", "last input", "last output",
 	"5 minute", "input rate", "output rate",
 	"show version", "cisco ios",
+	// show version banner
+	"technical support", "cisco systems", "uptime is", "bytes of",
 }
 
 // Detect reports whether input looks like Cisco configuration or show

@@ -826,6 +826,8 @@ func TestDetect(t *testing.T) {
 		{"cisco config with bangs", "!\nhostname router\n!\ninterface GigabitEthernet0/0/0\n ip address 10.0.0.1 255.255.255.0\n!", true, ParseModeConfig},
 		{"bang separators only", "!\n!\n", true, ParseModeConfig},
 		{"show interface", "GigabitEthernet0/0/0 is up, line protocol is up\n  Internet address is 203.0.113.1/24\n  5 minute input rate 1000 bits/sec", true, ParseModeShow},
+		{"show version", "Cisco IOS XE Software, Version 17.06.01\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2024 by Cisco Systems, Inc.\n", true, ParseModeShow},
+		{"show version memory", "32768K bytes of non-volatile configuration memory.\nrouter uptime is 1 week, 2 days\n", true, ParseModeShow},
 		{"hostname", "hostname core-router-01", true, ParseModeConfig},
 		{"interface", "interface GigabitEthernet0/0/0", true, ParseModeConfig},
 		{"router ospf", "router ospf 1", true, ParseModeConfig},
