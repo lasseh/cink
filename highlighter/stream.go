@@ -47,6 +47,7 @@ type Stream struct {
 	cisco   bool
 	mode    lexer.ParseMode // ParseModeAuto until a block's mode is known
 	timer   *time.Timer
+	timerID uint64 // bumped on every stop, so a callback that already fired can tell it is stale
 	err     error
 }
 
@@ -62,10 +63,7 @@ func (s *Stream) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.timer != nil {
-		s.timer.Stop()
-		s.timer = nil
-	}
+	s.stopTimer()
 
 	if !s.h.IsEnabled() {
 		s.write(string(s.pending))
@@ -92,7 +90,8 @@ func (s *Stream) Write(p []byte) (int, error) {
 	case len(s.pending) > maxPending, s.FlushDelay > 0 && !endsMidWord(s.pending):
 		s.emitPending()
 	case s.FlushDelay > 0:
-		s.timer = time.AfterFunc(s.FlushDelay, s.flushTimer)
+		id := s.timerID
+		s.timer = time.AfterFunc(s.FlushDelay, func() { s.flushTimer(id) })
 	}
 
 	return len(p), s.err
@@ -102,17 +101,28 @@ func (s *Stream) Write(p []byte) (int, error) {
 func (s *Stream) Flush() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.timer != nil {
-		s.timer.Stop()
-		s.timer = nil
-	}
+	s.stopTimer()
 	s.emitPending()
 	return s.err
 }
 
-func (s *Stream) flushTimer() {
+// stopTimer cancels the pending flush. Stop cannot recall a callback that
+// already fired and is waiting for the lock, so bumping timerID makes that
+// callback a no-op.
+func (s *Stream) stopTimer() {
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
+	}
+	s.timerID++
+}
+
+func (s *Stream) flushTimer(id uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if id != s.timerID {
+		return
+	}
 	s.timer = nil
 	s.emitPending()
 }

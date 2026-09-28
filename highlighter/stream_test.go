@@ -157,6 +157,38 @@ func TestStreamFlushDelay(t *testing.T) {
 	}
 }
 
+// A timer that fired while Write held the lock must not flush the partial
+// word that Write just extended.
+func TestStreamIgnoresStaleTimer(t *testing.T) {
+	h := New()
+	var out syncBuffer
+	s := NewStream(&out, h)
+	s.Force = true
+	s.FlushDelay = time.Hour
+
+	if _, err := s.Write([]byte("interface GigabitEth")); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	stale := s.timerID
+	s.mu.Unlock()
+	if _, err := s.Write([]byte("ernet0/1")); err != nil {
+		t.Fatal(err)
+	}
+
+	s.flushTimer(stale)
+	if got := out.String(); got != "" {
+		t.Fatalf("stale timer flushed the partial word: %q", got)
+	}
+
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if want := feed(t, h, true, "interface GigabitEthernet0/1"); out.String() != want {
+		t.Errorf("got  %q\nwant %q", out.String(), want)
+	}
+}
+
 func TestStreamPassesNonCiscoThrough(t *testing.T) {
 	h := New()
 	input := "there is no problem with the build\nwe are connected now\n"
